@@ -1,3 +1,5 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 document.addEventListener('DOMContentLoaded', () => {
     const messageInput = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
@@ -10,7 +12,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
     let isTyping = false;
-e
+    let genAI = null;
+    let model = null;
+    let chatSession = null;
+
+    // API Key Management
+    const API_KEY_STORAGE = 'chatterai_api_key';
+
+    function initializeAI() {
+        let apiKey = localStorage.getItem(API_KEY_STORAGE);
+
+        if (!apiKey) {
+            apiKey = prompt("Please enter your Google Gemini API Key to continue:");
+            if (apiKey) {
+                localStorage.setItem(API_KEY_STORAGE, apiKey);
+            } else {
+                appendMessage('ai', "⚠️ **API Key Required**\n\nTo use ChatterAI, you need a Google Gemini API Key. Please refresh and enter your key.");
+                return false;
+            }
+        }
+
+        try {
+            genAI = new GoogleGenerativeAI(apiKey);
+            // Using gemini-1.5-flash as default, but allowing for upgrades
+            model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+            chatSession = model.startChat({
+                history: [],
+                generationConfig: {
+                    maxOutputTokens: 1000,
+                },
+            });
+            return true;
+        } catch (error) {
+            console.error("Error initializing AI:", error);
+            appendMessage('ai', "❌ **Initialization Error**\n\nFailed to initialize the AI model. Please check your API key.");
+            localStorage.removeItem(API_KEY_STORAGE);
+            return false;
+        }
+    }
+
+    // Initialize on load
+    const isReady = initializeAI();
+
     function toggleSidebar() {
         const isClosed = sidebar.classList.contains('-translate-x-full');
         if (isClosed) {
@@ -43,6 +87,8 @@ e
     });
 
     async function handleSendMessage() {
+        if (!isReady && !initializeAI()) return;
+
         const text = messageInput.value.trim();
         if (!text || isTyping) return;
 
@@ -64,19 +110,41 @@ e
         scrollToBottom();
 
         isTyping = true;
-
         const typingId = appendTypingIndicator();
         scrollToBottom();
 
-        await new Promise(r => setTimeout(r, 1500));
+        try {
+            // Send message to Gemini
+            const result = await chatSession.sendMessageStream(text);
 
-        removeMessage(typingId);
+            removeMessage(typingId);
+            const aiMessageId = appendMessage('ai', ''); // Create empty message bubble
+            let fullResponse = "";
 
-        const responseResponse = getSimulatedResponse(text);
-        appendMessage('ai', responseResponse);
-        scrollToBottom();
+            for await (const chunk of result.stream) {
+                const chunkText = chunk.text();
+                fullResponse += chunkText;
+                updateMessageContent(aiMessageId, fullResponse);
+                scrollToBottom();
+            }
 
-        isTyping = false;
+        } catch (error) {
+            console.error("Generation Error:", error);
+            removeMessage(typingId);
+            appendMessage('ai', "⚠️ **Error**\n\n" + error.message);
+
+            // If authentication error, clear key
+            if (error.message.includes('403') || error.message.includes('API key')) {
+                localStorage.removeItem(API_KEY_STORAGE);
+                appendMessage('ai', "Key has been removed. Please try again to enter a new key.");
+                // Reset session
+                genAI = null;
+                model = null;
+                chatSession = null;
+            }
+        } finally {
+            isTyping = false;
+        }
     }
 
     sendBtn.addEventListener('click', handleSendMessage);
@@ -99,7 +167,9 @@ e
     });
 
     function appendMessage(role, text) {
+        const id = 'msg-' + Date.now() + Math.random().toString(36).substr(2, 9);
         const div = document.createElement('div');
+        div.id = id;
         div.className = `flex gap-4 max-w-3xl ${role === 'user' ? 'ml-auto' : ''} w-full animate-fade-in`;
 
         if (role === 'user') {
@@ -118,7 +188,7 @@ e
                 </div>
                 <div class="flex-1 space-y-2 max-w-[85%]">
                     <div class="text-xs font-bold text-gray-400">ChatterAI</div>
-                    <div class="text-gray-200 leading-relaxed prose-invert">
+                    <div class="text-gray-200 leading-relaxed prose-invert message-content">
                         ${parseMarkdown(text)}
                     </div>
                 </div>
@@ -126,6 +196,17 @@ e
         }
 
         messagesList.appendChild(div);
+        return id;
+    }
+
+    function updateMessageContent(id, text) {
+        const messageDiv = document.getElementById(id);
+        if (messageDiv) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            if (contentDiv) {
+                contentDiv.innerHTML = parseMarkdown(text);
+            }
+        }
     }
 
     function appendTypingIndicator() {
@@ -135,7 +216,7 @@ e
         div.className = 'flex gap-4 max-w-3xl w-full animate-fade-in';
         div.innerHTML = `
             <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex-shrink-0 flex items-center justify-center shadow-lg shadow-primary/20">
-                 <i class="fa-solid fa-robot text-white text-xs"></i>
+                <i class="fa-solid fa-robot text-white text-xs"></i>
             </div>
             <div class="flex items-center">
                 <div class="bg-surface border border-white/10 px-4 py-3 rounded-2xl rounded-tl-sm text-gray-100 shadow-sm">
@@ -164,6 +245,7 @@ e
     }
 
     function escapeHtml(unsafe) {
+        if (!unsafe) return "";
         return unsafe
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -173,31 +255,15 @@ e
     }
 
     function parseMarkdown(text) {
+        if (!text) return "";
         let html = escapeHtml(text);
 
         html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
         html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-        html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-
+        html = html.replace(/```(\w*)([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>');
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
         html = html.replace(/\n/g, '<br>');
 
         return html;
-    }
-
-    function getSimulatedResponse(input) {
-        const lowerInput = input.toLowerCase();
-        if (lowerInput.includes('hello') || lowerInput.includes('hi')) {
-            return "Hello! I'm ChatterAI. **How can I assist you today?**";
-        } else if (lowerInput.includes('python')) {
-            return "Here's a simple Python script for you:\n\n```python\ndef hello_world():\n    print('Hello, World!')\n\nhello_world()\n```\n\nIs there anything specific you need help with?";
-        } else if (lowerInput.includes('thank')) {
-            return "You're welcome! Let me know if you need anything else.";
-        } else {
-            return "That's an interesting topic! As an AI, I can help you research, write code, or just chat about it. **What would you like to do next?**";
-        }
     }
 });
