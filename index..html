@@ -182,16 +182,19 @@
 
             <div id="messages-list" class="flex flex-col space-y-6 max-w-3xl mx-auto w-full pb-4 hidden">
                 <div class="flex gap-4 max-w-3xl ml-auto">
-                    <div class="bg-surface border border-white/10 px-5 py-3 rounded-2xl rounded-tr-sm text-gray-100 shadow-sm">
+                    <div
+                        class="bg-surface border border-white/10 px-5 py-3 rounded-2xl rounded-tr-sm text-gray-100 shadow-sm">
                         Hello, who are you?
                     </div>
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex-shrink-0 flex items-center justify-center text-xs font-bold text-white shadow-md order-last">
+                    <div
+                        class="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex-shrink-0 flex items-center justify-center text-xs font-bold text-white shadow-md order-last">
                         SA
                     </div>
                 </div>
 
                 <div class="flex gap-4 max-w-3xl">
-                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex-shrink-0 flex items-center justify-center shadow-lg shadow-primary/20">
+                    <div
+                        class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex-shrink-0 flex items-center justify-center shadow-lg shadow-primary/20">
                         <i class="fa-solid fa-robot text-white text-xs"></i>
                     </div>
                     <div class="flex-1 space-y-2">
@@ -231,7 +234,14 @@
         </div>
     </main>
 
-    <script src="./assets/js/app.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+    <script type="module" src="./assets/js/app.js"></script>
 </body>
 
 </html>
