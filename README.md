@@ -18,6 +18,14 @@ ChatterAI UI is a sleek, responsive frontend template designed for conversationa
 
 > **Note:** This is currently a frontend demo with simulated responses. It does not connect to a live backend API out of the box.
 
+---
+
+## 📸 Screenshots
+
+<div align="center">
+  <img width="1919" height="906" alt="image" src="https://github.com/user-attachments/assets/ed9a697f-7453-47de-873d-923b3a70682e" />
+</div>
+
 ## ✨ Features
 
 - **🎨 Premium Dark UI**: Carefully crafted color palette using Tailwind CSS.
